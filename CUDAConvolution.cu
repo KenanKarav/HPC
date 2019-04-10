@@ -10,7 +10,7 @@
 #include <cuda_runtime.h>
 #include <helper_functions.h>
 #include <helper_cuda.h>
-
+using namespace std;
 
 void loadImage(string fname, float *image, char** argv){
     unsigned int width, height;
