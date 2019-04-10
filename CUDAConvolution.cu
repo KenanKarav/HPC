@@ -26,9 +26,10 @@ void loadImage(string fname, float *image){
 
     printf("Success \n");
 }
-int main()
+int main(char** argv)
 {
-    loadImage("lena_bw.pgm");
+    float* image;
+    loadImage("lena_bw.pgm", image,argv);
 
     return 0;
 }
