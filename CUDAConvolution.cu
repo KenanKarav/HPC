@@ -39,6 +39,7 @@ for( int row = 0; row < N; ++row )
       c[row * N + col] = val;
     }
 }
+
 int main()
 {
   int *a, *b, *c_cpu, *c_gpu; // Allocate a solution matrix for both the CPU and the GPU operations
