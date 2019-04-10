@@ -26,7 +26,7 @@ void loadImage(const char* fname, float *image, char** argv){
 
     printf("Success \n");
 }
-int main(char** argv)
+int main(int argc, char* argv[])
 {
     float* image = NULL;
     const char* fname = "lena_bw.pgm";
