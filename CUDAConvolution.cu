@@ -12,7 +12,7 @@
 #include <helper_cuda.h>
 
 
-void loadImage(string fname, float *image){
+void loadImage(string fname, float *image, char** argv){
     unsigned int width, height;
     char *imagePath = sdkFindFilePath(fname, argv[0]);
 
