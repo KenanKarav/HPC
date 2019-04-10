@@ -18,7 +18,7 @@ void loadImage(const string fname, float *image, char** argv){
 
     if (imagePath == NULL)
     {
-        printf("Unable to source image file: %s\n", fname);
+        printf("Unable to source image file\n");
         exit(EXIT_FAILURE);
     }
 
@@ -28,7 +28,7 @@ void loadImage(const string fname, float *image, char** argv){
 }
 int main(char** argv)
 {
-    float* image;
+    float* image = NULL;
     const string fname = "lena_bw.pgm";
     loadImage(fname, image,argv);
 
