@@ -24,7 +24,7 @@ void loadImage(const char* fname, float *image, char** argv){
 
     sdkLoadPGM(imagePath, &image, &width, &height);
 
-    printf("Succ \n %f", image[0][0]);
+    cout << image[0] << "hi\n";
 }
 int main(int argc, char* argv[])
 {
