@@ -24,7 +24,7 @@ void loadImage(const char* fname, float *image, char** argv){
 
     sdkLoadPGM(imagePath, &image, &width, &height);
 
-    printf("Success \n");
+    printf("Success \n %f", image[0]);
 }
 int main(int argc, char* argv[])
 {
@@ -32,6 +32,6 @@ int main(int argc, char* argv[])
     const char* fname = "lena_bw.pgm";
     loadImage(fname, image,argv);
 
-    printf("ïmage pixel 0 is: %f", image[0]);
+    printf("image pixel 0 is: %f", image[0]);
     return 0;
 }
