@@ -42,22 +42,11 @@ int main(int argc, char* argv[])
 
     sdkLoadPGM(imagePath, &image, &width, &height);
 
-    float* filter = NULL;
 
-    unsigned int wfilter, hfilter;
-    char *filterImagePath = sdkFindFilePath(filterName, argv[0]);
-
-
-    if (filterImagePath == NULL)
-    {
-        printf("Unable to source filter file\n");
-        exit(EXIT_FAILURE);
-    }
-
-    sdkLoadPGM(filterImagePath, &filter, &wfilter, &hfilter);
+    float * sharpeningfilter = [-1.0,-1.0,-1.0,-1.0,9.0,-1.0,-1.0,-1.0,-1.0];
 
     unsigned int size = width*height* sizeof(float);
-    unsigned int filtersize = wfilter*hfilter* sizeof(float);
+    unsigned int filtersize = sizeof(sharpeningfilter)/sizeof(*sharpeningfilter)* sizeof(float);
 
 
     convolve(image,filter);
