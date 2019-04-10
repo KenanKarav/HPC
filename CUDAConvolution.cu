@@ -16,6 +16,17 @@ using namespace std;
 
 const char* fname = "lena_bw.pgm";
 const char* filterName = "ref_rotated.pgm";
+
+
+float* convolve(float* image, float* filter){
+
+    
+
+
+    return image;
+
+}
+
 int main(int argc, char* argv[])
 {
     float* image = NULL;
