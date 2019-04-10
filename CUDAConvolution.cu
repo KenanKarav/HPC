@@ -15,7 +15,7 @@ using namespace std;
 
 
 const char* fname = "lena_bw.pgm";
-
+const char* filterName = "ref_rotated.pgm";
 int main(int argc, char* argv[])
 {
     float* image = NULL;
@@ -30,7 +30,24 @@ int main(int argc, char* argv[])
     }
 
     sdkLoadPGM(imagePath, &image, &width, &height);
+
+    float* filter = NULL;
+
+    unsigned int wfilter, hfilter;
+    char *filterImagePath = sdkFindFilePath(filterName, argv[0]);
+
+
+    if (filterImagePath == NULL)
+    {
+        printf("Unable to source filter file\n");
+        exit(EXIT_FAILURE);
+    }
+
+    sdkLoadPGM(filterImagePath, &filter, &wfilter, &hfilter);
+
     unsigned int size = width*height* sizeof(float);
-    printf("Image Size: %i\n", size);
+    unsigned int filtersize = wfilter*hfilter* sizeof(float);
+
+    printf("Image Size: %i\n Filter Size: %i\n", size,filtersize);
     return 0;
 }
