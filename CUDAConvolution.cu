@@ -20,7 +20,7 @@ const char* filterName = "ref_rotated.pgm";
 
 float* convolve(float* image, float* filter){
 
-    
+
 
 
     return image;
@@ -59,6 +59,8 @@ int main(int argc, char* argv[])
     unsigned int size = width*height* sizeof(float);
     unsigned int filtersize = wfilter*hfilter* sizeof(float);
 
+
+    convolve(image,filter);
     printf("Image Size: %i\n Filter Size: %i\n", size,filtersize);
     return 0;
 }
