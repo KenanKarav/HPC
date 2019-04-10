@@ -43,7 +43,7 @@ int main(int argc, char* argv[])
     sdkLoadPGM(imagePath, &image, &width, &height);
 
 
-    float * sharpeningfilter = [-1.0,-1.0,-1.0,-1.0,9.0,-1.0,-1.0,-1.0,-1.0];
+    float * sharpeningfilter = {-1.0,-1.0,-1.0,-1.0,9.0,-1.0,-1.0,-1.0,-1.0};
 
     unsigned int size = width*height* sizeof(float);
     unsigned int filtersize = sizeof(sharpeningfilter)/sizeof(*sharpeningfilter)* sizeof(float);
