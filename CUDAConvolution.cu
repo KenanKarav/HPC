@@ -12,7 +12,7 @@
 #include <helper_cuda.h>
 using namespace std;
 
-void loadImage(const string fname, float *image, char** argv){
+void loadImage(const char* fname, float *image, char** argv){
     unsigned int width, height;
     char *imagePath = sdkFindFilePath(fname, argv[0]);
 
@@ -29,7 +29,7 @@ void loadImage(const string fname, float *image, char** argv){
 int main(char** argv)
 {
     float* image = NULL;
-    const string fname = "lena_bw.pgm";
+    const char* fname = "lena_bw.pgm";
     loadImage(fname, image,argv);
 
     return 0;
