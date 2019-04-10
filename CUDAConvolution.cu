@@ -32,5 +32,6 @@ int main(int argc, char* argv[])
     const char* fname = "lena_bw.pgm";
     loadImage(fname, image,argv);
 
+    printf("ïmage pixel 0 is: %f", image[0]);
     return 0;
 }
