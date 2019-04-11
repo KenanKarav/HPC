@@ -64,6 +64,12 @@ void convolveCPU(float *image, float* output,float* filter, unsigned int width, 
 
 }
 
+__global__ void convolutionGPU(float* image, float* output, float* filter, int height,int width){
+
+	int idx = threadIdx.x;
+
+	printf("threadID %i\n", idx);
+		}
 int main(int argc, char* argv[]){
     float *image = NULL;
 
@@ -92,21 +98,31 @@ int main(int argc, char* argv[]){
 
 	
 
-	// Output Array
 		
 
 
-    //unsigned int size = width*height* sizeof(float);
-    //unsigned int filtersize = sizeof(sharpeningfilter)/sizeof(*sharpeningfilter)* sizeof(float);
+    unsigned int size = width*height* sizeof(float);
+    unsigned int filtersize = sizeof(sharpeningFilter)/sizeof(*sharpeningFilter)* sizeof(float);
 
-    convolveCPU(image,output,sharpeningFilter, width, height);
-	for(int i = 0; i<3; i++){
+	float *dFilter = NULL;
+	float *dImage = NULL;
+	float *dResult = NULL;
+	int * dHeight = NULL;
+	int * dWidth = NULL;
+	checkCudaErrors(cudaMalloc((void **) &dHeight, sizeof(uint)));
+	checkCudaErrors(cudaMalloc((void **) &dWidth, sizeof(uint)));
+	checkCudaErrors(cudaMalloc((void **) &dImage, size));
+	checkCudaErrors(cudaMalloc((void **) &dResult, size));
+	checkCudaErrors(cudaMalloc((void **) &dFilter, filtersize));
 
-		for(int j =0; j< 3; j++){
+	checkCudaErrors(cudaMemcpy(dHeight,&height, sizeof(uint), cudaMemcpyHostToDevice));
+	checkCudaErrors(cudaMemcpy(dWidth,&width, sizeof(uint), cudaMemcpyHostToDevice));
+	checkCudaErrors(cudaMemcpy(dImage,image, size, cudaMemcpyHostToDevice));
+	checkCudaErrors(cudaMemcpy(dFilter,sharpeningFilter, filtersize, cudaMemcpyHostToDevice));
 
-			printf("%f,",output[j+i*width]);
-			}
-		printf("\n");
-		}
+	convolutionGPU<<<1,1>>>(image,output,sharpeningFilter,height,width);
+    //convolveCPU(image,output,sharpeningFilter, width, height);
+	cudaFree(dHeight);cudaFree(dWidth);cudaFree(dImage);cudaFree(dFilter); cudaFree(dResult);
     return 0;
 }
+
