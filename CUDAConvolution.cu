@@ -68,7 +68,18 @@ __global__ void convolutionGPU(float* image, float* output, float* filter, int h
 
 	int idx = threadIdx.x;
 
-	printf("threadID %i\n", idx);
+			printf("size of image: %i\n ", sizeof(image));
+			printf("size of output: %i\n ", sizeof(output));
+			printf("size of filter: %i\n ", sizeof(filter));
+			printf("size of height: %i\n ", sizeof(height));
+			printf("size of width: %i\n ", sizeof(width));
+		/*for(int i = 0; i<3; i++){
+
+		for(int j =0; j< 3; j++){
+			}
+		}*/
+
+
 		}
 int main(int argc, char* argv[]){
     float *image = NULL;
