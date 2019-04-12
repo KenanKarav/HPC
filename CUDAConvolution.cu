@@ -25,7 +25,7 @@ void convolveCPU(float *image, float* output,float* filter, unsigned int width, 
 
 	float sum;
 	int filterDim = sqrt(sizeof(filter)+1);
-	int count = 0;
+
 	float val,fval;
 	for(int i =0; i< height; i++){
 		
@@ -64,25 +64,47 @@ void convolveCPU(float *image, float* output,float* filter, unsigned int width, 
 
 }
 
-__global__ void convolutionGPU(float* image, float* output, float* filter, int height,int width){
+__global__ void convolutionNaiveGPU(float* image, float* output, float* filter, uint height,uint width, uint filterDim){
 
-	int idx = threadIdx.x;
+	uint col = threadIdx.x;
+	
+	uint row = blockIdx.x*blockDim.x;
+	if (row+col < height*width*sizeof(float)){
+	
+			
+		for (int i = -filterDim/2; i < filterDim/2;i++){
 
-			printf("size of image: %i\n ", sizeof(image));
-			printf("size of output: %i\n ", sizeof(output));
-			printf("size of filter: %i\n ", sizeof(filter));
-			printf("size of height: %i\n ", sizeof(height));
-			printf("size of width: %i\n ", sizeof(width));
-		/*for(int i = 0; i<3; i++){
+		for(int j =-filterDim/2; j<filterDim/2; j++){
 
-		for(int j =0; j< 3; j++){
+			/*if((i-r)<0 || (i-r)>height-1 || (j-c)<0 || (j-c)>width-1){
+			val = 0.0;
+			}else{
+	
+			val = image[(j-c) + (i-r)*width];
+
+				}
+
+			fval = filter[(c+filterDim/2) + (r+filterDim/2)*filterDim];
+
+			sum += val*fval;
+
+			}*/
+
+			
 			}
-		}*/
 
+			}
 
 		}
+		
+		}
 int main(int argc, char* argv[]){
-    float *image = NULL;
+
+
+
+
+
+    float * image = NULL;
 
     unsigned int width, height;
     char *imagePath = sdkFindFilePath(fname, argv[0]);
@@ -95,21 +117,14 @@ int main(int argc, char* argv[]){
 	// Get image
     sdkLoadPGM(imagePath, &image, &width, &height);
 
+    printf("Loaded '%s', %d x %d pixels\n", fname, width, height);
 	float output[width*height];
+
     float sharpeningFilter[9]= {-1.0,-1.0,-1.0,-1.0,9.0,-1.0,-1.0,-1.0,-1.0};
 
-	for(int i = 0; i<3; i++){
+	uint filterDim = sqrt(sizeof(sharpeningFilter)/sizeof(float)+1);	
 
-		for(int j =0; j< 3; j++){
 
-			printf("%f,",image[j+i*width]);
-			}
-		printf("\n");
-		}
-
-	
-
-		
 
 
     unsigned int size = width*height* sizeof(float);
@@ -118,22 +133,28 @@ int main(int argc, char* argv[]){
 	float *dFilter = NULL;
 	float *dImage = NULL;
 	float *dResult = NULL;
-	int * dHeight = NULL;
-	int * dWidth = NULL;
-	checkCudaErrors(cudaMalloc((void **) &dHeight, sizeof(uint)));
-	checkCudaErrors(cudaMalloc((void **) &dWidth, sizeof(uint)));
+
+
 	checkCudaErrors(cudaMalloc((void **) &dImage, size));
 	checkCudaErrors(cudaMalloc((void **) &dResult, size));
 	checkCudaErrors(cudaMalloc((void **) &dFilter, filtersize));
 
-	checkCudaErrors(cudaMemcpy(dHeight,&height, sizeof(uint), cudaMemcpyHostToDevice));
-	checkCudaErrors(cudaMemcpy(dWidth,&width, sizeof(uint), cudaMemcpyHostToDevice));
 	checkCudaErrors(cudaMemcpy(dImage,image, size, cudaMemcpyHostToDevice));
 	checkCudaErrors(cudaMemcpy(dFilter,sharpeningFilter, filtersize, cudaMemcpyHostToDevice));
 
-	convolutionGPU<<<1,1>>>(image,output,sharpeningFilter,height,width);
+	
+    	dim3 dimBlock(16, 16,1);
+    	dim3 dimGrid(width / dimBlock.x, height / dimBlock.y,1);
+	 
+
+	convolutionNaiveGPU<<<512,512>>>(dImage,dResult,dFilter,height,width,filterDim);
+	
+	cudaDeviceSynchronize();
+	checkCudaErrors(cudaMemcpy(output,dResult,size, cudaMemcpyDeviceToHost));
+
+	printf("size of output %li\n", sizeof(image));
     //convolveCPU(image,output,sharpeningFilter, width, height);
-	cudaFree(dHeight);cudaFree(dWidth);cudaFree(dImage);cudaFree(dFilter); cudaFree(dResult);
+cudaFree(dImage);cudaFree(dFilter); cudaFree(dResult);
     return 0;
 }
 
