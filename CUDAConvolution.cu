@@ -11,26 +11,26 @@
 #include <cuda_runtime.h>
 #include <helper_functions.h>
 #include <helper_cuda.h>
+
 using namespace std;
 
+	const uint MAX_FILTER_SIZE = 49;
 
-
-const char* fname = "lena_bw.pgm";
-const char* filterName = "ref_rotated.pgm";
+	const char* fname = "lena_bw.pgm";
 
 	float sharpeningFilter[9]= {-1.0,-1.0,-1.0,-1.0,9.0,-1.0,-1.0,-1.0,-1.0};
 	float blur[9] = {0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11};
 	float blur5[25] = {0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04};
 
-	int filterDim = sqrt(sizeof(sharpeningFilter)/sizeof(float)+1);	
+	
+	__constant__ float ConstFilter[MAX_FILTER_SIZE];
+	
 
-	int filterDim5 = sqrt(sizeof(blur5)/sizeof(float) +1);
 
-
-void convolveCPU(float *image, float* output,float* filter, unsigned int width, unsigned int height){
+void convolveCPU(float *image, float* output,float* filter, unsigned int width, unsigned int height,int filterDim){
 
 	float sum;
-	int filterDim = sqrt(sizeof(filter)+1);
+	
 
 	float val,fval;
 	for(int i =0; i< height; i++){
@@ -70,6 +70,47 @@ void convolveCPU(float *image, float* output,float* filter, unsigned int width, 
 
 }
 
+
+__global__ void convolutionConstantGPU(float* image, float* output, uint height,uint width, int filterDim){
+
+uint idx = threadIdx.x+blockIdx.x*blockDim.x;
+	bool print = 0;
+	float val,fval;
+	float sum = 0.0;
+	int imRow,imCol;
+
+	
+
+	if (idx < height*width*sizeof(float)){
+	
+			
+		for (int r = -filterDim/2; r <= filterDim/2;r++){
+
+		for(int c =-filterDim/2; c<=filterDim/2; c++){
+		imRow = blockIdx.x - r;
+		imCol = threadIdx.x - c;
+		
+			
+			if(imRow< 0 || imCol <0 || imRow> height-1 || imCol > width-1){
+			val = 0.0;
+		}else{
+			val = image[imCol + imRow*width];
+			}
+			fval = ConstFilter[(c+filterDim/2) + (r+filterDim/2)*filterDim];
+
+			sum += val*fval;
+			
+			}
+			
+		}
+
+		if(sum<0) sum =0.0;
+		if(sum>1) sum =1.0;
+		output[idx] = sum;
+		}
+
+}
+
 __global__ void convolutionNaiveGPU(float* image, float* output, float* filter, uint height,uint width, int filterDim){
 
 	uint idx = threadIdx.x+blockIdx.x*blockDim.x;
@@ -77,6 +118,8 @@ __global__ void convolutionNaiveGPU(float* image, float* output, float* filter, 
 	float val,fval;
 	float sum = 0.0;
 	int imRow,imCol;
+
+	
 
 	if (idx < height*width*sizeof(float)){
 	
@@ -109,7 +152,90 @@ __global__ void convolutionNaiveGPU(float* image, float* output, float* filter, 
 
 
 
-void NaiveGPU(const char*  exe){
+
+void ConstantGPU(const char* exe, float * filter,uint filterDim){
+
+	
+	
+	float * image = NULL;
+
+    unsigned int width, height;
+    char *imagePath = sdkFindFilePath(fname, exe);
+
+    if (imagePath == NULL)
+    {
+        printf("Unable to source image file\n");
+        exit(EXIT_FAILURE);
+    }
+	// Get image
+    sdkLoadPGM(imagePath, &image, &width, &height);
+
+    printf("Loaded '%s', %d x %d pixels\n", fname, width, height);
+	float output[width*height];
+
+
+
+	unsigned int size = width*height* sizeof(float);
+	unsigned int filtersize = (filterDim*filterDim)* sizeof(float);
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	
+
+/////////////////////////////////////////////////////////////////////CUDA///////////////////////////////////////////////////////////	
+	float *dFilter = NULL;
+	float *dImage = NULL;
+	float *dResult = NULL;
+
+
+	checkCudaErrors(cudaMalloc((void **) &dImage, size));
+	checkCudaErrors(cudaMalloc((void **) &dResult, size));
+	checkCudaErrors(cudaMalloc((void **) &dFilter, filtersize));
+
+	checkCudaErrors(cudaMemcpy(dImage,image, size, cudaMemcpyHostToDevice));
+	checkCudaErrors(cudaMemcpyToSymbol(ConstFilter,filter, filtersize));
+
+	
+	 
+
+    checkCudaErrors(cudaDeviceSynchronize());
+    StopWatchInterface *timer = NULL;
+    sdkCreateTimer(&timer);
+    sdkStartTimer(&timer);
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+	convolutionConstantGPU<<<height,width>>>(dImage,dResult,height,width,filterDim);
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	sdkStopTimer(&timer);
+    printf("Processing time for Constant: %f (ms)\n", sdkGetTimerValue(&timer));
+    printf("%.2f Mpixels/sec\n",
+           (width *height / (sdkGetTimerValue(&timer) / 1000.0f)) / 1e6);
+    sdkDeleteTimer(&timer);
+	
+	cudaDeviceSynchronize();
+	checkCudaErrors(cudaMemcpy(output,dResult,size, cudaMemcpyDeviceToHost));
+	
+	
+    	char outputFilenameNaive[1024];
+    	strcpy(outputFilenameNaive, imagePath);
+    	strcpy(outputFilenameNaive + strlen(imagePath) - 4, "_constant_out.pgm");
+    	sdkSavePGM(outputFilenameNaive, output, width, height);
+    	printf("Wrote '%s'\n", outputFilenameNaive);
+
+
+
+
+cudaFree(dImage);cudaFree(dFilter); cudaFree(dResult);
+
+
+}
+
+
+void NaiveGPU(const char*  exe, float * filter, uint filterDim){
 
 float * image = NULL;
 
@@ -128,15 +254,12 @@ float * image = NULL;
 	float output[width*height];
 
 
-	int filterDim = sqrt(sizeof(sharpeningFilter)/sizeof(float)+1);	
-
-	int filterDim5 = sqrt(sizeof(blur5)/sizeof(float) +1);
 
 
 
 	unsigned int size = width*height* sizeof(float);
-	unsigned int filtersize = sizeof(sharpeningFilter)/sizeof(*sharpeningFilter)* sizeof(float);
-	uint filtersize5 = sizeof(blur5)/sizeof(*blur5)* sizeof(float);
+	unsigned int filtersize = filterDim*filterDim* sizeof(float);
+	
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	
 
@@ -151,7 +274,7 @@ float * image = NULL;
 	checkCudaErrors(cudaMalloc((void **) &dFilter, filtersize));
 
 	checkCudaErrors(cudaMemcpy(dImage,image, size, cudaMemcpyHostToDevice));
-	checkCudaErrors(cudaMemcpy(dFilter,blur, filtersize, cudaMemcpyHostToDevice));
+	checkCudaErrors(cudaMemcpy(dFilter,filter, filtersize, cudaMemcpyHostToDevice));
 
 	
 	 
@@ -194,7 +317,7 @@ cudaFree(dImage);cudaFree(dFilter); cudaFree(dResult);
 
 
 
-void CPU(const char* exe, float * filter){
+void CPU(const char* exe, float * filter, uint filterDim){
 
 float * image = NULL;
 
@@ -216,8 +339,6 @@ float * image = NULL;
 
 
 
-	unsigned int size = width*height* sizeof(float);
-	unsigned int filtersize = sizeof(filter)/sizeof(*filter)* sizeof(float);
 
 
 
@@ -234,7 +355,7 @@ float * image = NULL;
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-    	convolveCPU(image,outputCPU,filter, width, height);
+    	convolveCPU(image,outputCPU,filter, width, height,filterDim);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -267,9 +388,9 @@ int main(int argc, char* argv[]){
 
 
 	const char * exe = argv[0];
-	NaiveGPU(exe);
-
-	CPU(exe,blur);
+	NaiveGPU(exe,blur,3);
+	ConstantGPU(exe,blur,3);
+	CPU(exe,blur,3);
 	
 
     return 0;
