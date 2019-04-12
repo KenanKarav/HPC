@@ -235,6 +235,51 @@ cudaFree(dImage);cudaFree(dFilter); cudaFree(dResult);
 }
 
 
+void TextureGPU(const char* exe, float * filter, uint filterDim){
+
+
+float * image = NULL;
+
+    unsigned int width, height;
+    char *imagePath = sdkFindFilePath(fname, exe);
+
+    if (imagePath == NULL)
+    {
+        printf("Unable to source image file\n");
+        exit(EXIT_FAILURE);
+    }
+	// Get image
+    sdkLoadPGM(imagePath, &image, &width, &height);
+
+    printf("Loaded '%s', %d x %d pixels\n", fname, width, height);
+	float output[width*height];
+
+
+
+	unsigned int size = width*height* sizeof(float);
+	unsigned int filtersize = (filterDim*filterDim)* sizeof(float);
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	
+
+/////////////////////////////////////////////////////////////////////CUDA///////////////////////////////////////////////////////////	
+	float *dFilter = NULL;
+	float *dImage = NULL;
+	float *dResult = NULL;
+
+
+
+	checkCudaErrors(cudaMalloc((void **) &dResult, size));
+
+	checkCudaErrors(cudaMemcpy(dImage,image, size, cudaMemcpyHostToDevice));
+	checkCudaErrors(cudaMemcpyToSymbol(ConstFilter,filter, filtersize));
+
+
+}
+
+
 void NaiveGPU(const char*  exe, float * filter, uint filterDim){
 
 float * image = NULL;
