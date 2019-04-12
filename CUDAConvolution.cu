@@ -13,6 +13,8 @@
 #include <helper_cuda.h>
 using namespace std;
 
+
+
 const char* fname = "lena_bw.pgm";
 const char* filterName = "ref_rotated.pgm";
 
@@ -20,18 +22,21 @@ const char* filterName = "ref_rotated.pgm";
 	float blur[9] = {0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11};
 	float blur5[25] = {0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04};
 
+	int filterDim = sqrt(sizeof(sharpeningFilter)/sizeof(float)+1);	
+
+	int filterDim5 = sqrt(sizeof(blur5)/sizeof(float) +1);
 
 
 void convolveCPU(float *image, float* output,float* filter, unsigned int width, unsigned int height){
 
-	float sum=0.0;
+	float sum;
 	int filterDim = sqrt(sizeof(filter)+1);
-	bool print =0;
+
 	float val,fval;
 	for(int i =0; i< height; i++){
 		
 	for(int j =0; j<width; j++){
-
+	sum = 0.0;
 
 	for(int r = -filterDim/2; r<=filterDim/2;r++){
 		
@@ -65,9 +70,6 @@ void convolveCPU(float *image, float* output,float* filter, unsigned int width, 
 
 }
 
-
-
-
 __global__ void convolutionNaiveGPU(float* image, float* output, float* filter, uint height,uint width, int filterDim){
 
 	uint idx = threadIdx.x+blockIdx.x*blockDim.x;
@@ -76,14 +78,6 @@ __global__ void convolutionNaiveGPU(float* image, float* output, float* filter, 
 	float sum = 0.0;
 	int imRow,imCol;
 
-	if(idx ==0) print =1;
-	if(print){
-	for(int i =0; i<9;i++){
-	printf("%f",filter[i]);
-	}
-	printf("\n");
-		}
-		
 	if (idx < height*width*sizeof(float)){
 	
 			
@@ -115,9 +109,7 @@ __global__ void convolutionNaiveGPU(float* image, float* output, float* filter, 
 
 
 
-
-void ConstantGPU(const char* exe, float * filter){
-
+void NaiveGPU(const char*  exe){
 
 float * image = NULL;
 
@@ -136,15 +128,15 @@ float * image = NULL;
 	float output[width*height];
 
 
-	int filterDim = sqrt(sizeof(filter)/sizeof(float)+1);	
+	int filterDim = sqrt(sizeof(sharpeningFilter)/sizeof(float)+1);	
 
-
+	int filterDim5 = sqrt(sizeof(blur5)/sizeof(float) +1);
 
 
 
 	unsigned int size = width*height* sizeof(float);
-	unsigned int filtersize = sizeof(filter)*sizeof(float);
-	
+	unsigned int filtersize = sizeof(sharpeningFilter)/sizeof(*sharpeningFilter)* sizeof(float);
+	uint filtersize5 = sizeof(blur5)/sizeof(*blur5)* sizeof(float);
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	
 
@@ -159,95 +151,7 @@ float * image = NULL;
 	checkCudaErrors(cudaMalloc((void **) &dFilter, filtersize));
 
 	checkCudaErrors(cudaMemcpy(dImage,image, size, cudaMemcpyHostToDevice));
-	checkCudaErrors(cudaMemcpy(dFilter,filter, filtersize, cudaMemcpyHostToDevice));
-
-	
-	 
-
-    checkCudaErrors(cudaDeviceSynchronize());
-    StopWatchInterface *timer = NULL;
-    sdkCreateTimer(&timer);
-    sdkStartTimer(&timer);
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	cout<< "In ConstGPU"<<endl;
-	for(int i =0; i<9;i++){
-	printf("%f",filter[i]);
-	}
-	printf("\n");
-	convolutionNaiveGPU<<<height,width>>>(dImage,dResult,dFilter,height,width,filterDim);
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	sdkStopTimer(&timer);
-    printf("Processing time for Naive: %f (ms)\n", sdkGetTimerValue(&timer));
-    printf("%.2f Mpixels/sec\n",
-           (width *height / (sdkGetTimerValue(&timer) / 1000.0f)) / 1e6);
-    sdkDeleteTimer(&timer);
-	
-	cudaDeviceSynchronize();
-	checkCudaErrors(cudaMemcpy(output,dResult,size, cudaMemcpyDeviceToHost));
-	
-	
-    	char outputFilenameNaive[1024];
-    	strcpy(outputFilenameNaive, imagePath);
-    	strcpy(outputFilenameNaive + strlen(imagePath) - 4, "_constant_out.pgm");
-    	sdkSavePGM(outputFilenameNaive, output, width, height);
-    	printf("Wrote '%s'\n", outputFilenameNaive);
-
-
-
-
-cudaFree(dImage);cudaFree(dFilter); cudaFree(dResult);
-
-}
-
-
-void NaiveGPU(const char*  exe, float* filter){
-
-float * image = NULL;
-
-    unsigned int width, height;
-    char *imagePath = sdkFindFilePath(fname, exe);
-
-    if (imagePath == NULL)
-    {
-        printf("Unable to source image file\n");
-        exit(EXIT_FAILURE);
-    }
-	// Get image
-    sdkLoadPGM(imagePath, &image, &width, &height);
-
-    printf("Loaded '%s', %d x %d pixels\n", fname, width, height);
-	float output[width*height];
-
-
-	int filterDim = sqrt(sizeof(filter)/sizeof(float)+1);	
-
-
-
-
-
-	unsigned int size = width*height* sizeof(float);
-	unsigned int filtersize = sizeof(filter)* sizeof(float);
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	
-
-/////////////////////////////////////////////////////////////////////CUDA///////////////////////////////////////////////////////////	
-	float *dFilter = NULL;
-	float *dImage = NULL;
-	float *dResult = NULL;
-
-
-	checkCudaErrors(cudaMalloc((void **) &dImage, size));
-	checkCudaErrors(cudaMalloc((void **) &dResult, size));
-	checkCudaErrors(cudaMalloc((void **) &dFilter, filtersize));
-
-	checkCudaErrors(cudaMemcpy(dImage,image, size, cudaMemcpyHostToDevice));
-	checkCudaErrors(cudaMemcpy(dFilter,filter, filtersize, cudaMemcpyHostToDevice));
+	checkCudaErrors(cudaMemcpy(dFilter,blur, filtersize, cudaMemcpyHostToDevice));
 
 	
 	 
@@ -277,7 +181,7 @@ float * image = NULL;
 	
     	char outputFilenameNaive[1024];
     	strcpy(outputFilenameNaive, imagePath);
-    	strcpy(outputFilenameNaive + strlen(imagePath) - 4, "_naive_out.pgm");
+    	strcpy(outputFilenameNaive + strlen(imagePath) - 4, "naive_out.pgm");
     	sdkSavePGM(outputFilenameNaive, output, width, height);
     	printf("Wrote '%s'\n", outputFilenameNaive);
 
@@ -319,7 +223,6 @@ float * image = NULL;
 
 
 
-
 	printf("size of output %li\n", sizeof(image));
 
 	checkCudaErrors(cudaDeviceSynchronize());
@@ -344,7 +247,7 @@ float * image = NULL;
 	
     	char outputFilename[1024];
     	strcpy(outputFilename, imagePath);
-    	strcpy(outputFilename + strlen(imagePath) - 4, "_CPU_out.pgm");
+    	strcpy(outputFilename + strlen(imagePath) - 4, "_out.pgm");
     	sdkSavePGM(outputFilename, outputCPU, width, height);
     	printf("Wrote '%s'\n", outputFilename);
 
@@ -364,10 +267,9 @@ int main(int argc, char* argv[]){
 
 
 	const char * exe = argv[0];
-	ConstantGPU(exe,sharpeningFilter);
-	NaiveGPU(exe,sharpeningFilter);
-	
-	CPU(exe,sharpeningFilter);
+	NaiveGPU(exe);
+
+	CPU(exe,blur);
 	
 
     return 0;
