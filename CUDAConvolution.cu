@@ -2,7 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-//#include <opencv2/opencv.hpp>
+
+#include <tuple>
+
 #ifdef _WIN32
 #  define WINDOWS_LEAN_AND_MEAN
 #  define NOMINMAX
@@ -16,16 +18,152 @@ using namespace std;
 
 	const uint MAX_FILTER_SIZE = 49;
 
-	const char* fname = "storm.pgm";
+	const char* fname;
 
-	float sharpeningFilter[9]= {-1.0,-1.0,-1.0,-1.0,9.0,-1.0,-1.0,-1.0,-1.0};
+
 	float blur[9] = {0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11};
-	float blur5[25] = {0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04};
 
+	float vSobel[9] = {-1.0,0.0,1.0,-2.0,0.0,2.0,-1.0,0.0,1.0};
 
+	float hSobel[9] = {1.0,2.0,1.0,0.0,0.0,0.0,-1.0,-2.0,-1.0};
 	__constant__ float ConstFilter[MAX_FILTER_SIZE];
 
 	texture <float, 2, cudaReadModeElementType> tex;
+
+
+
+/////////////////////////////////////////////////////////////
+// HELPER FUNCTIONS; ////////////////////////////////////////
+/////////////////////////////////////////////////////////////
+
+void getBlur(float* filter,int size){
+
+
+	if(size != 3 && size != 5 && size !=7){
+
+		printf("Invalid filter size \n Defaulting to 3\n");
+		size = 3;
+
+	}
+
+
+	int numels = size*size;
+
+
+	float val = 1.0/numels;
+		for(int i = 0; i< numels; i++){
+
+			filter[i] = val;
+
+
+		}
+
+}
+
+
+void getOnes(float * filter){
+
+	for(int i =0; i<9 ;i++){
+
+		filter[i] = 1.0;
+	}
+
+}
+void getSharpen(float * filter,int size){
+
+
+	if(size != 3 && size != 5 && size !=7){
+
+		printf("Invalid filter size \n Defaulting to 3\n");
+		size = 3;
+
+	}
+
+	int numels = size*size;
+
+
+	float val = numels;
+		for(int i = 0; i< numels; i++){
+
+			filter[i] = -1;
+			if(i == numels/2) filter[i] = val;
+
+		}
+
+}
+tuple<float *,char*, uint, uint> loadImage(const char* fname,const char* exe){
+
+	printf("\n\n\n");
+	float * image = NULL;
+
+	    unsigned int width, height;
+	    char *imagePath = sdkFindFilePath(fname, exe);
+
+	    if (imagePath == NULL)
+	    {
+	        printf("Unable to source image file\n");
+	        exit(EXIT_FAILURE);
+	    }
+
+	    sdkLoadPGM(imagePath, &image, &width, &height);
+
+	    printf("Loaded '%s', %d x %d pixels\n", fname, width, height);
+
+			return std::make_tuple(image,imagePath,height,width);
+
+}
+
+void getFilter(float * filter, char choice, int filterFlag){
+
+
+
+	switch(choice){
+
+		case 'b':
+
+							getBlur(filter, filterFlag);
+							break;
+		case 's':
+
+							getSharpen(filter,filterFlag);
+							break;
+
+		case 'e':
+							switch(filterFlag){
+
+								case 0:
+
+								for(int i = 0 ; i<9; i++){
+									filter[i] = vSobel[i];
+								}
+								break;
+								default:
+
+								for(int i = 0 ; i<9; i++){
+									filter[i] = hSobel[i];
+								}
+								break;
+							}
+							break;
+
+		default:
+				printf("Invalid Filter Selection. Chose Ones\n");
+				getOnes(filter);
+				break;
+
+	}
+
+
+
+
+}
+
+
+
+
+
+
+
 
 
 	__global__ void convolutionTextureGPU(float *output,float * filter,int width,int height,int filterDim)
@@ -116,7 +254,6 @@ void convolveCPU(float *image, float* output,float* filter, unsigned int width, 
 __global__ void convolutionConstantGPU(float* image, float* output, uint height,uint width, int filterDim){
 
 uint idx = threadIdx.x+blockIdx.x*blockDim.x;
-	bool print = 0;
 	float val,fval;
 	float sum = 0.0;
 	int imRow,imCol;
@@ -156,7 +293,7 @@ uint idx = threadIdx.x+blockIdx.x*blockDim.x;
 __global__ void convolutionNaiveGPU(float* image, float* output, float* filter, uint height,uint width, int filterDim){
 
 	uint idx = threadIdx.x+blockIdx.x*blockDim.x;
-	bool print = 0;
+
 	float val,fval;
 	float sum = 0.0;
 	int imRow,imCol;
@@ -250,20 +387,11 @@ __syncthreads();
 
 void SharedGPU(const char*  exe, float * filter, int filterDim){
 
-float * image = NULL;
+	float * image = NULL;
+	char* imagePath = NULL;
+	unsigned int width, height;
 
-    unsigned int width, height;
-    char *imagePath = sdkFindFilePath(fname, exe);
-
-    if (imagePath == NULL)
-    {
-        printf("Unable to source image file\n");
-        exit(EXIT_FAILURE);
-    }
-	// Get image
-    sdkLoadPGM(imagePath, &image, &width, &height);
-
-    printf("Loaded '%s', %d x %d pixels\n", fname, width, height);
+	std::tie(image, imagePath,height,width) = loadImage(fname,exe);
 	float output[width*height];
 
 
@@ -333,19 +461,10 @@ void ConstantGPU(const char* exe, float * filter,uint filterDim){
 
 
 	float * image = NULL;
+	char* imagePath = NULL;
+	unsigned int width, height;
 
-    unsigned int width, height;
-    char *imagePath = sdkFindFilePath(fname, exe);
-
-    if (imagePath == NULL)
-    {
-        printf("Unable to source image file\n");
-        exit(EXIT_FAILURE);
-    }
-	// Get image
-    sdkLoadPGM(imagePath, &image, &width, &height);
-
-    printf("Loaded '%s', %d x %d pixels\n", fname, width, height);
+	std::tie(image, imagePath,height,width) = loadImage(fname,exe);
 	float output[width*height];
 
 
@@ -413,20 +532,11 @@ cudaFree(dImage);cudaFree(dFilter); cudaFree(dResult);
 void TextureGPU(const char* exe, float * filter, int filterDim){
 
 
-float * image = NULL;
+	float * image = NULL;
+	char* imagePath = NULL;
+	unsigned int width, height;
 
-    unsigned int width, height;
-    char *imagePath = sdkFindFilePath(fname, exe);
-
-    if (imagePath == NULL)
-    {
-        printf("Unable to source image file\n");
-        exit(EXIT_FAILURE);
-    }
-	// Get image
-    sdkLoadPGM(imagePath, &image, &width, &height);
-
-    printf("Loaded '%s', %d x %d pixels\n", fname, width, height);
+	std::tie(image, imagePath,height,width) = loadImage(fname,exe);
 
 	float output[width*height];
 	unsigned int size = width*height* sizeof(float);
@@ -503,20 +613,11 @@ float * image = NULL;
 
 void NaiveGPU(const char*  exe, float * filter, uint filterDim){
 
-float * image = NULL;
+	float * image = NULL;
+	char* imagePath = NULL;
+	unsigned int width, height;
 
-    unsigned int width, height;
-    char *imagePath = sdkFindFilePath(fname, exe);
-
-    if (imagePath == NULL)
-    {
-        printf("Unable to source image file\n");
-        exit(EXIT_FAILURE);
-    }
-	// Get image
-    sdkLoadPGM(imagePath, &image, &width, &height);
-
-    printf("Loaded '%s', %d x %d pixels\n", fname, width, height);
+	std::tie(image, imagePath,height,width) = loadImage(fname,exe);
 	float output[width*height];
 
 
@@ -570,7 +671,7 @@ checkCudaErrors(cudaDeviceSynchronize());
 
     	char outputFilenameNaive[1024];
     	strcpy(outputFilenameNaive, imagePath);
-    	strcpy(outputFilenameNaive + strlen(imagePath) - 4, "naive_out.pgm");
+    	strcpy(outputFilenameNaive + strlen(imagePath) - 4, "_naive_out.pgm");
     	sdkSavePGM(outputFilenameNaive, output, width, height);
     	printf("Wrote '%s'\n", outputFilenameNaive);
 
@@ -585,32 +686,13 @@ cudaFree(dImage);cudaFree(dFilter); cudaFree(dResult);
 
 void CPU(const char* exe, float * filter, uint filterDim){
 
-float * image = NULL;
+	float * image = NULL;
+	char* imagePath = NULL;
+  unsigned int width, height;
 
-    unsigned int width, height;
-    char *imagePath = sdkFindFilePath(fname, exe);
-
-    if (imagePath == NULL)
-    {
-        printf("Unable to source image file\n");
-        exit(EXIT_FAILURE);
-    }
-	// Get image
-    sdkLoadPGM(imagePath, &image, &width, &height);
-
-    printf("Loaded '%s', %d x %d pixels\n", fname, width, height);
-
+	std::tie(image, imagePath,height,width) = loadImage(fname,exe);
 	float outputCPU[width*height];
 
-
-
-
-
-
-
-
-
-	printf("size of output %li\n", sizeof(image));
 
 	checkCudaErrors(cudaDeviceSynchronize());
     	StopWatchInterface *timerCPU = NULL;
@@ -627,8 +709,8 @@ float * image = NULL;
 checkCudaErrors(cudaDeviceSynchronize());
 	sdkStopTimer(&timerCPU);
     printf("Processing time for CPU: %f (ms)\n", sdkGetTimerValue(&timerCPU));
-    printf("%.2f Mpixels/sec\n",
-           (width *height / (sdkGetTimerValue(&timerCPU) / 1000.0f)) / 1e6);
+    printf("%.2f GFLOPS/sec\n",
+           (width *height*filterDim*filterDim*2) / (sdkGetTimerValue(&timerCPU) / 1000.0f) / 1e9);
     sdkDeleteTimer(&timerCPU);
 
 
@@ -654,10 +736,22 @@ int main(int argc, char* argv[]){
 
 
 	const char * exe = argv[0];
-	NaiveGPU(exe,blur,3);
-	ConstantGPU(exe,blur,3);
-	CPU(exe,blur,3);
-	TextureGPU(exe,blur,3);
-	SharedGPU(exe,blur,3);
+	fname = argv[1];
+	char filterchoice = argv[2][0];
+	int filterFlag = argv[3][0] - '0'; //converting char to digit value
+
+	int filterSize = filterFlag;
+	if(filterFlag == 0 || filterFlag == 1){
+		filterSize = 3;
+	}
+	float filter [filterSize*filterSize];
+
+	getFilter(filter,filterchoice,filterFlag);
+
+	NaiveGPU(exe,filter,filterSize);
+	ConstantGPU(exe,filter,filterSize);
+	CPU(exe,filter,filterSize);
+	TextureGPU(exe,filter,filterSize);
+	SharedGPU(exe,filter,filterSize);
     return 0;
 }
