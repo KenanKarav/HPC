@@ -25,38 +25,33 @@ using namespace std;
 
 	__constant__ float ConstFilter[MAX_FILTER_SIZE];
 
-	texture <float, 1, cudaReadModeElementType> tex;
+	texture <float, 2, cudaReadModeElementType> tex;
 
 
-	__global__ void convolutionTextureGPU(float *output,float * filter,
-	                                int width,
-	                                int height,
-	                                uint filterDim)
+	__global__ void convolutionTextureGPU(float *output,float * filter,int width,int height,int filterDim)
 	{
 	    // calculate normalized texture coordinates
-	    uint idx = threadIdx.x+blockIdx.x*blockDim.x ;
-
+	    uint idxX = threadIdx.x+blockIdx.x*blockDim.x ;
+			uint idxY = threadIdx.y + blockIdx.y*blockDim.y;
 			float val,fval;
 			float sum = 0.0;
 			int imRow,imCol;
 
-			if(idx == 0) printf("element 0,1 is %f, filter 00 is %f\n",tex1D(tex,idx),filter[idx]);
 
 
-			if (idx < height*width*sizeof(float)){
 
 
 				for (int r = -filterDim/2; r <= filterDim/2;r++){
 
 				for(int c =-filterDim/2; c<=filterDim/2; c++){
-				imRow = blockIdx.x - r;
-				imCol = threadIdx.x - c;
+				imRow = idxX - r;
+				imCol = idxY - c;
 
 
 					if(imRow< 0 || imCol <0 || imRow> height-1 || imCol > width-1){
 					val = 0.0;
 				}else{
-					val = tex1D(tex, imCol+imRow*width);
+					val = tex2D(tex, imCol+0.5f,imRow + 0.5f);
 					}
 					fval = ConstFilter[(c+filterDim/2) + (r+filterDim/2)*filterDim];
 
@@ -68,9 +63,9 @@ using namespace std;
 
 				if(sum<0) sum =0.0;
 				if(sum>1) sum =1.0;
-				output[idx] = sum;
-				}
-	    // read from texture and write to global memory
+				output[idxY + width*idxX] = sum;
+
+
 
 	}
 
@@ -300,77 +295,71 @@ float * image = NULL;
     sdkLoadPGM(imagePath, &image, &width, &height);
 
     printf("Loaded '%s', %d x %d pixels\n", fname, width, height);
+
 	float output[width*height];
-
-
-
 	unsigned int size = width*height* sizeof(float);
-	unsigned int filtersize = (filterDim*filterDim)* sizeof(float);
+	unsigned int filtersize = filterDim*filterDim* sizeof(float);
 
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-/////////////////////////////////////////////////////////////////////CUDA///////////////////////////////////////////////////////////
+	cudaArray *dImage = NULL;
 	float *dFilter = NULL;
-  float *dImage = NULL;
 	float *dResult = NULL;
-
-
 	checkCudaErrors(cudaMalloc((void **) &dResult, size));
-	checkCudaErrors(cudaMalloc((void**) &dFilter,filtersize));
-	checkCudaErrors(cudaMalloc((void**) &dImage,size));
+	checkCudaErrors(cudaMalloc((void **) &dFilter, filtersize));
+
 
 	cudaChannelFormatDesc channelDesc =
-			cudaCreateChannelDesc(sizeof(float)*8, 0, 0, 0, cudaChannelFormatKindFloat);
+			cudaCreateChannelDesc(8*sizeof(float), 0, 0, 0, cudaChannelFormatKindFloat);
 
-	/*	cudaArray *dImage;
-			checkCudaErrors(cudaMallocArray(&dImage, &channelDesc,width,height));
-	checkCudaErrors(cudaMemcpyToArray(dImage,0,0,image, size, cudaMemcpyHostToDevice));
-*/
-
-
-	checkCudaErrors(cudaMemcpy(dImage, image,size, cudaMemcpyHostToDevice));
-	checkCudaErrors(cudaMemcpy(dFilter, filter,filtersize, cudaMemcpyHostToDevice));
-
+	checkCudaErrors(cudaMallocArray(&dImage, &channelDesc, width, height));
+	checkCudaErrors(cudaMemcpyToArray(dImage, 0, 0, image, size, cudaMemcpyHostToDevice));
 
 	tex.addressMode[0] = cudaAddressModeBorder;
-	checkCudaErrors(cudaBindTexture(NULL,tex, dImage, channelDesc,size));
+	tex.addressMode[1] = cudaAddressModeBorder;
+	//tex.filterMode = cudaFilterModeLinear;
+	tex.normalized = false;
+
+	checkCudaErrors(cudaBindTextureToArray(tex, dImage, channelDesc));
+
+	dim3 dimBlock(8, 8, 1);
+	dim3 dimGrid(width / dimBlock.x, height / dimBlock.y, 1);
 
 
 
+	checkCudaErrors(cudaDeviceSynchronize());
+	StopWatchInterface *timer = NULL;
+	sdkCreateTimer(&timer);
+	sdkStartTimer(&timer);
+
+///////////////////////////////////////////////////////////////////
+
+	convolutionTextureGPU<<<dimGrid, dimBlock, 0>>>(dResult,dFilter, width, height, filterDim);
 
 
-	    checkCudaErrors(cudaDeviceSynchronize());
-	    StopWatchInterface *timer = NULL;
-	    sdkCreateTimer(&timer);
-	    sdkStartTimer(&timer);
+/////////////////////////////////////////////////
+	checkCudaErrors(cudaDeviceSynchronize());
+	sdkStopTimer(&timer);
+	printf("Processing time: %f (ms)\n", sdkGetTimerValue(&timer));
+	printf("%.2f Mpixels/sec\n",
+				 (width *height / (sdkGetTimerValue(&timer) / 1000.0f)) / 1e6);
+	sdkDeleteTimer(&timer);
 
-			dim3 dimBlock(8,8,1);
+	// Allocate mem for the result on host side
 
-	    dim3 dimGrid(width / dimBlock.x, height / dimBlock.y, 1);
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// copy result from device to host
+	checkCudaErrors(cudaMemcpy(output,
+														 dResult,
+														 size,
+														 cudaMemcpyDeviceToHost));
 
+	// Write result to file
+	char outputFilename[1024];
+	strcpy(outputFilename, imagePath);
+	strcpy(outputFilename + strlen(imagePath) - 4, "_texture_out.pgm");
+	sdkSavePGM(outputFilename, output, width, height);
+	printf("Wrote '%s'\n", outputFilename);
 
-		convolutionTextureGPU<<<height,width>>>(dResult,dFilter,height,width,filterDim);
-
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-		sdkStopTimer(&timer);
-	    printf("Processing time for Texture: %f (ms)\n", sdkGetTimerValue(&timer));
-	    printf("%.2f Mpixels/sec\n",
-	           (width *height / (sdkGetTimerValue(&timer) / 1000.0f)) / 1e6);
-	    sdkDeleteTimer(&timer);
-
-		cudaDeviceSynchronize();
-		checkCudaErrors(cudaMemcpy(output,dResult,size, cudaMemcpyDeviceToHost));
-
-
-	    	char outputFilenameNaive[1024];
-	    	strcpy(outputFilenameNaive, imagePath);
-	    	strcpy(outputFilenameNaive + strlen(imagePath) - 4, "_texture_out.pgm");
-	    	sdkSavePGM(outputFilenameNaive, output, width, height);
-	    	printf("Wrote '%s'\n", outputFilenameNaive);
 
 
 
