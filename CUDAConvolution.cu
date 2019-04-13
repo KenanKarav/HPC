@@ -387,6 +387,12 @@ __syncthreads();
 
 void SharedGPU(const char*  exe, float * filter, int filterDim){
 
+
+
+		checkCudaErrors(cudaDeviceSynchronize());
+		StopWatchInterface *Otimer = NULL;
+		sdkCreateTimer(&Otimer);
+		sdkStartTimer(&Otimer);
 	float * image = NULL;
 	char* imagePath = NULL;
 	unsigned int width, height;
@@ -434,9 +440,11 @@ void SharedGPU(const char*  exe, float * filter, int filterDim){
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 checkCudaErrors(cudaDeviceSynchronize());
 	sdkStopTimer(&timer);
+
+	float KernelTime = sdkGetTimerValue(&timer);
     printf("Processing time for Shared: %f (ms)\n", sdkGetTimerValue(&timer));
-    printf("%.2f Mpixels/sec\n",
-           (width *height / (sdkGetTimerValue(&timer) / 1000.0f)) / 1e6);
+		printf("%.2f GLOPS\n",
+           (width *height*filterDim*filterDim*2) / (sdkGetTimerValue(&timer) / 1000.0f) / 1e9);
     sdkDeleteTimer(&timer);
 
 	cudaDeviceSynchronize();
@@ -453,12 +461,20 @@ checkCudaErrors(cudaDeviceSynchronize());
 
 
 cudaFree(dImage);cudaFree(dFilter); cudaFree(dResult);
+checkCudaErrors(cudaDeviceSynchronize());
+	sdkStopTimer(&Otimer);
+    printf("Overhead: %f (ms)\n",  sdkGetTimerValue(&Otimer)- KernelTime);
 
+    sdkDeleteTimer(&Otimer);
 }
 
 void ConstantGPU(const char* exe, float * filter,uint filterDim){
 
 
+		checkCudaErrors(cudaDeviceSynchronize());
+		StopWatchInterface *Otimer = NULL;
+		sdkCreateTimer(&Otimer);
+		sdkStartTimer(&Otimer);
 
 	float * image = NULL;
 	char* imagePath = NULL;
@@ -505,9 +521,11 @@ void ConstantGPU(const char* exe, float * filter,uint filterDim){
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 checkCudaErrors(cudaDeviceSynchronize());
 	sdkStopTimer(&timer);
+
+	float KernelTime = sdkGetTimerValue(&timer);
     printf("Processing time for Constant: %f (ms)\n", sdkGetTimerValue(&timer));
-    printf("%.2f Mpixels/sec\n",
-           (width *height / (sdkGetTimerValue(&timer) / 1000.0f)) / 1e6);
+		printf("%.2f GLOPS\n",
+           (width *height*filterDim*filterDim*2) / (sdkGetTimerValue(&timer) / 1000.0f) / 1e9);
     sdkDeleteTimer(&timer);
 
 	cudaDeviceSynchronize();
@@ -524,7 +542,11 @@ checkCudaErrors(cudaDeviceSynchronize());
 
 
 cudaFree(dImage);cudaFree(dFilter); cudaFree(dResult);
+checkCudaErrors(cudaDeviceSynchronize());
+	sdkStopTimer(&Otimer);
+    printf("Overhead: %f (ms)\n",  sdkGetTimerValue(&Otimer)- KernelTime);
 
+    sdkDeleteTimer(&Otimer);
 
 }
 
@@ -532,6 +554,10 @@ cudaFree(dImage);cudaFree(dFilter); cudaFree(dResult);
 void TextureGPU(const char* exe, float * filter, int filterDim){
 
 
+		checkCudaErrors(cudaDeviceSynchronize());
+		StopWatchInterface *Otimer = NULL;
+		sdkCreateTimer(&Otimer);
+		sdkStartTimer(&Otimer);
 	float * image = NULL;
 	char* imagePath = NULL;
 	unsigned int width, height;
@@ -584,9 +610,11 @@ void TextureGPU(const char* exe, float * filter, int filterDim){
 /////////////////////////////////////////////////
 	checkCudaErrors(cudaDeviceSynchronize());
 	sdkStopTimer(&timer);
+
+	float KernelTime = sdkGetTimerValue(&timer);
 	printf("Processing time for Texture: %f (ms)\n", sdkGetTimerValue(&timer));
-	printf("%.2f Mpixels/sec\n",
-				 (width *height / (sdkGetTimerValue(&timer) / 1000.0f)) / 1e6);
+	printf("%.2f GLOPS\n",
+				 (width *height*filterDim*filterDim*2) / (sdkGetTimerValue(&timer) / 1000.0f) / 1e9);
 	sdkDeleteTimer(&timer);
 
 
@@ -606,12 +634,21 @@ void TextureGPU(const char* exe, float * filter, int filterDim){
 
 
 	cudaFree(dImage);cudaFree(dFilter); cudaFree(dResult);
+	checkCudaErrors(cudaDeviceSynchronize());
+		sdkStopTimer(&Otimer);
+	    printf("Overhead: %f (ms)\n",  sdkGetTimerValue(&Otimer)- KernelTime);
 
+	    sdkDeleteTimer(&Otimer);
 	printf("Reached End of Texture\n\n\n\n\n");
 }
 
 
 void NaiveGPU(const char*  exe, float * filter, uint filterDim){
+
+	checkCudaErrors(cudaDeviceSynchronize());
+	StopWatchInterface *Otimer = NULL;
+	sdkCreateTimer(&Otimer);
+	sdkStartTimer(&Otimer);
 
 	float * image = NULL;
 	char* imagePath = NULL;
@@ -658,11 +695,13 @@ void NaiveGPU(const char*  exe, float * filter, uint filterDim){
 	convolutionNaiveGPU<<<height,width>>>(dImage,dResult,dFilter,height,width,filterDim);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 checkCudaErrors(cudaDeviceSynchronize());
 	sdkStopTimer(&timer);
+	float KernelTime = sdkGetTimerValue(&timer);
     printf("Processing time for Naive: %f (ms)\n", sdkGetTimerValue(&timer));
-    printf("%.2f Mpixels/sec\n",
-           (width *height / (sdkGetTimerValue(&timer) / 1000.0f)) / 1e6);
+		printf("%.2f GLOPS\n",
+           (width *height*filterDim*filterDim*2) / (sdkGetTimerValue(&timer) / 1000.0f) / 1e9);
     sdkDeleteTimer(&timer);
 
 	cudaDeviceSynchronize();
@@ -679,12 +718,22 @@ checkCudaErrors(cudaDeviceSynchronize());
 
 
 cudaFree(dImage);cudaFree(dFilter); cudaFree(dResult);
+checkCudaErrors(cudaDeviceSynchronize());
+	sdkStopTimer(&Otimer);
+    printf("Overhead: %f (ms)\n",  sdkGetTimerValue(&Otimer)- KernelTime);
 
+    sdkDeleteTimer(&Otimer);
 }
 
 
 
 void CPU(const char* exe, float * filter, uint filterDim){
+
+	checkCudaErrors(cudaDeviceSynchronize());
+	StopWatchInterface *Otimer = NULL;
+	sdkCreateTimer(&Otimer);
+	sdkStartTimer(&Otimer);
+
 
 	float * image = NULL;
 	char* imagePath = NULL;
@@ -708,8 +757,9 @@ void CPU(const char* exe, float * filter, uint filterDim){
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 checkCudaErrors(cudaDeviceSynchronize());
 	sdkStopTimer(&timerCPU);
+		float KernelTime = sdkGetTimerValue(&timerCPU);
     printf("Processing time for CPU: %f (ms)\n", sdkGetTimerValue(&timerCPU));
-    printf("%.2f GFLOPS/sec\n",
+    printf("%.2f GLOPS\n",
            (width *height*filterDim*filterDim*2) / (sdkGetTimerValue(&timerCPU) / 1000.0f) / 1e9);
     sdkDeleteTimer(&timerCPU);
 
@@ -721,7 +771,11 @@ checkCudaErrors(cudaDeviceSynchronize());
     	printf("Wrote '%s'\n", outputFilename);
 
 
+			checkCudaErrors(cudaDeviceSynchronize());
+				sdkStopTimer(&Otimer);
+			    printf("Overhead: %f (ms)\n",  sdkGetTimerValue(&Otimer)- KernelTime);
 
+			    sdkDeleteTimer(&Otimer);
 
 
 
@@ -747,10 +801,10 @@ int main(int argc, char* argv[]){
 	float filter [filterSize*filterSize];
 
 	getFilter(filter,filterchoice,filterFlag);
-
+	CPU(exe,filter,filterSize);
 	NaiveGPU(exe,filter,filterSize);
 	ConstantGPU(exe,filter,filterSize);
-	CPU(exe,filter,filterSize);
+
 	TextureGPU(exe,filter,filterSize);
 	SharedGPU(exe,filter,filterSize);
     return 0;
