@@ -1,0 +1,84 @@
+\documentclass[10pt]{article}
+\usepackage[numbers, sort&compress]{natbib}
+\usepackage{graphicx}
+\usepackage{float}
+\setlength{\belowcaptionskip}{-15.0pt}
+\title{COMS4040A \& COMS7045A \\Assignment 2 -- Report}
+\author{Kenan Karavoussanos\\ 1348582\\ Computer Science Honours}
+ 
+\begin{document}
+	
+	%\thispagestyle{empty}
+	
+	
+	\maketitle
+	\newpage
+	\pagenumbering{arabic} 
+	\section{Introduction}
+	
+	The Convolution operation has important applications in the fields of mathematics, computer science and electrical engineering amongst others. The convolution operation in simplified terms is the response of a system when given some input.
+	
+	\paragraph{} In the context of Image Processing, the discrete convolution operation is used for image filtering. This operation is computationally expensive however, due to the fact that each computation in this operation is independent of others, this operation is a very good candidate for parallelization. There is a significant amount of input data overlap between each of these computations. As such, data sharing between these computations can be exploited to improve the performance of the parallel convolution algorithm. The purpose of this work is to implement image convolution using CUDA and evaluate the efficacy of using the different CUDA memory hierarchies.  
+	
+	\paragraph{} The report contains a discussion of the different CUDA memory hierarchies, a description of the design choices made during implementation, as well as a presentation and discussion of the performance of each parallel algorithm.
+	
+	\section{CUDA Memory Hierarchies}
+	This section provides an overview of the various CUDA memory hierarchies. The main reference for this section is The CUDA C Programming Guide\cite{cuda}.
+	
+	\subsection{CUDA Architecture}
+		The following diagram shows the CUDA Architecture. This diagram will be used as reference in the discussion to follow.
+		\begin{figure}[H]
+		\includegraphics[ width = \textwidth ,keepaspectratio]{"Images/MemoryArchitecture"}
+		\caption{CUDA Architecture}
+		\end{figure}
+
+	 \subsection{Global Memory}
+	 
+	 \paragraph{} Global memory resides in Device RAM (DRAM). This is memory is named as such due to the fact that the device and host can both modify this memory i.e the scope of access is global to device and host. Memory transactions are restricted to 32,64 and 128-bytes at a time and only memory addresses that are a multiple of these sizes can be accessed. When a warp of threads executes a memory transaction, it will coalesce the memory accesses of each thread according to the locality of the memory addresses and the size of each access. This is done to maximize throughput. As can be seen in figure 1, global memory (and DRAM) is off-chip so the latency when compared to local and shared memory is higher.
+	 
+	 \subsection{Constant Memory}
+	 
+	 \paragraph{}Constant Memory is read-only memory that resides in DRAM. It is cached in a read-only \emph{constant cache}. It is a small memory on the order of 64kB. If the memory accesses are coalesced properly then the memory transaction can be as fast as the on-chip registers. The contents of constant memory can only be changed prior to the kernel launch, after which it becomes read-only.
+	 
+	\subsection{Texture Memory}
+	
+		\paragraph{} Texture memory resides in DRAM and is cached in the \emph{texture cache}. On a cache miss, there is only one read access to global memory. The texture cache is optimized for \emph{2D spatial locality} so if threads access memory addresses that are close in 2D, the performance of texture memory will be improved.
+		
+	\subsection{Shared Memory}
+	
+	\paragraph{} Shared memory is on-chip memory. All threads in a block have access to the same shared memory address spaces and threads in other blocks do not have access to this memory. However, due to this sharing, careful consideration must be taken to synchronize threads to avoid race conditions. This memory has much higher bandwidth and lower latency than the other memory types due to it being on-chip.   
+	
+	\section{Design Choices}
+	
+	This section describes the design choices for each parallel algorithm as well as the implications of each choice.
+	\subsection{General}
+	
+	\paragraph{} It was decided that the parallel algorithms would use boundary checking instead of padding the image with zeros to treat halo cells as zero values. This was decided as the low computational cost boundary checks would be less expensive than the overhead of padding the image. 
+	\subsection{Naive/ Global Memory Parallel Approach}
+	
+	\paragraph{} This algorithm is the most basic approach to parallelization as such there were not many design choices to be made. However, it was decided that for this approach( and all others except texture memory) the image array would be linearized for simplicity of the code as well as the fact that 1D addressing is faster than 2D addressing. 
+	
+	\subsection{Constant Memory} 
+	
+	\paragraph{} Due to the limited size of constant memory, it was concluded that only the filter can reside in constant memory. Another approach would be to load a subset of the image into constant memory as well however this would complicate the code significantly and as such was decided against.
+	
+	\subsection{Texture Memory}
+	
+	\paragraph{} The address mode used for this algorithm was the \emph{Border} mode. This was to satisfy the requirement that the halo cells should be treated as zeros. The texture memory was not normalized as the image gray levels are already normalized as well as the fact that normalization requires two extra floating point operations per texture fetch. It was also decided that 2D texture references would be used for the simplicity of the code. 
+	
+	\subsection{Shared Memory}
+	
+	\paragraph{} Due to the fact that, for the naive/global memory approach, the number of global memory accesses to filter pixels and image pixels is equal and tiling significantly complicates code and has some added overhead. It was decided that the filter pixels would be stored in shared memory only. This approach still produced significant performance gains compared to the naive approach. One could argue to place both inside shared memory but due to the small size of shared memory both could not fit without significant complication of the code. 
+	
+	
+	\section{Results}
+	
+	\section{Summary}
+	%\vskip 3mm 
+	%\pagenumbering{roman}
+	\newpage
+	
+	\bibliographystyle{plainnat}
+	\bibliography{annot}
+\end{document} 
+
